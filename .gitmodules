@@ -1,0 +1,4 @@
+[submodule "BreezyCreate2"]
+	path = BreezyCreate2
+	url = https://github.com/simondlevy/BreezyCreate2.git
+	branch = master
