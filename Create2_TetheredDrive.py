@@ -54,8 +54,8 @@ connection = None
 TEXTWIDTH = 40 # window width, in characters
 TEXTHEIGHT = 16 # window height, in lines
 
-VELOCITYCHANGE = 200
-ROTATIONCHANGE = 300
+VELOCITYCHANGE = 20
+ROTATIONCHANGE = 100
 
 helpText = """\
 Supported Keys:

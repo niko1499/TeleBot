@@ -52,23 +52,27 @@ except ImportError:
     tkMessageBox.showerror('Import error', 'Please install pyserial.')
     raise
 
+# import sys,tty,termios
+
+
+import time
+import keyboard
+
 connection = None
 
 TEXTWIDTH = 40  # window width, in characters
 TEXTHEIGHT = 16  # window height, in lines
 
-AccelerationDuration = 3
-TimeStep = .25
-Ramping = False
-VelocityChanged = False
-
-VelocityStep = AccelerationDuration / TimeStep
-
-MaximumVelocity = 500
-VELOCITYCHANGE = 20
+VELOCITYCHANGE = 200
 ROTATIONCHANGE = 300
-if VelocityStep == 0:
-    VELOCITYCHANGE = MaximumVelocity
+
+VELOCITYMAX = 500
+VELOCITYMIN = 125
+VELOCITYLAST = 0
+VELOCITYDELTA = 1
+TIMERDONE = False
+OLDTIME = time.time()
+
 helpText = """\
 Supported Keys:
 P\tPassive
@@ -84,6 +88,17 @@ If nothing happens after you connect, try pressing 'P' and then 'S' to get into 
 """
 
 
+def getch():  # define non-Windows version
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+
 class TetheredDriveApp(Tk):
     # static variables for keyboard callback -- I know, this is icky
     callbackKeyUp = False
@@ -94,7 +109,7 @@ class TetheredDriveApp(Tk):
 
     def __init__(self):
         Tk.__init__(self)
-        self.title("RSI-TeleBot")
+        self.title("iRobot Create 2 Tethered Drive")
         self.option_add('*tearOff', FALSE)
 
         self.menubar = Menu()
@@ -107,60 +122,45 @@ class TetheredDriveApp(Tk):
         createMenu.add_command(label="Help", command=self.onHelp)
         createMenu.add_command(label="Quit", command=self.onQuit)
 
-        self.statusLBL = Label(self, text="Status")
-        self.statusLBL.grid(row=0, column=0)
-
-        self.accelerationLBL = Label(self, text="Seconds reach max velocity:")
-        self.accelerationLBL.grid(row=1, column=0)
-        self.acceleration = Scale(self, from_=0, to=20, tickinterval=1, orient=HORIZONTAL, length=600)
-        self.acceleration.set(2)
-        self.acceleration.grid(row=1, column=1)
-
-        self.velocityLBL = Label(self, text="Maximum velocity:")
-        self.velocityLBL.grid(row=2, column=0)
-        self.velocity = Scale(self, from_=0, to=200, tickinterval=25, orient=HORIZONTAL, length=600)
-        self.velocity.set(200)
-        self.velocity.grid(row=2, column=1)
-
         self.text = Text(self, height=TEXTHEIGHT, width=TEXTWIDTH, wrap=WORD)
         self.scroll = Scrollbar(self, command=self.text.yview)
         self.text.configure(yscrollcommand=self.scroll.set)
-        # self.text.grid (row=10,column=0)
-        # self.scroll.grid (row=10,column=0)
+        self.text.pack(side=LEFT, fill=BOTH, expand=True)
+        self.scroll.pack(side=RIGHT, fill=Y)
 
         self.text.insert(END, helpText)
 
-        self.bind("<Key>", self.callbackKey)
-        self.bind("<KeyRelease>", self.callbackKey)
+        # self.bind("<Key>", self.callbackKey)
+        # self.bind("<KeyRelease>", self.callbackKey)
+
+        # global char
+        # char = None
+        #        _thread.start_new_thread(self.keypressCB, ())
+
         self.customstartup()
+        #    keyboard.add_hotkey('up')
+        keyboard.hook(self.callbackKey)
 
-    def rampCB(self):
-        VelocityChanged = True
-        global VELOCITYCHANGE
-        if Ramping == True:
-            VELOCITYCHANGE += VelocityStep
-        else:
-            VELOCITYCHANGE -= VelocityStep
+    # def keyboardCB(self):
 
-        if VELOCITYCHANGE > MaximumVelocity:
-            VELOCITYCHANGE = MaximumVelocity
-        if VELOCITYCHANGE < 0:
-            VELOCITYCHANGE = 0
-
-        print("CB: ", VELOCITYCHANGE)
-        timer = threading.Timer(TimeStep, self.rampCB).start()
-
-
-        self.move()
+    def keypressCB(self):
+        global char
+        char = getch()
 
     def customstartup(self):
         self.directConnect("COM6")
         time.sleep(.1)
         self.sendCommandASCII('128')
         self.sendCommandASCII('131')
-        print "test"
-        print TimeStep
-        timer = threading.Timer(TimeStep, self.rampCB).start()
+        self.timer = threading.Timer(0.00000000250, self.timerCB)
+
+    # self.timer.start()
+
+    def timerCB(self):
+        global TIMERDONE
+        TIMERDONE = True
+        self.timer.run()
+        print TIMERDONE
 
     # sendCommandASCII takes a string of whitespace-separated, ASCII-encoded base 10 values to send
     def sendCommandASCII(self, command):
@@ -224,10 +224,21 @@ class TetheredDriveApp(Tk):
 
     # A handler for keyboard events. Feel free to add more!
     def callbackKey(self, event):
-        k = event.keysym.upper()
-        motionChange = False
+        global VELOCITYMAX
+        global VELOCITYMIN
+        global VELOCITYLAST
+        global VELOCITYDELTA
+        global TIMERDONE
+        global OLDTIME
+        # k = event.keysym.upper()
+        k = event.name
+        k = k.upper()
+        print"---------------------------"
+        print "KEYYY:", k
+        print "TYPE: " , event.event_type
 
-        if event.type == '2':  # KeyPress; need to figure out how to get constant
+        motionChange = False
+        if event.event_type == 'down':  # KeyPress; need to figure out how to get constant
             if k == 'P':  # Passive
                 self.sendCommandASCII('128')
             elif k == 'S':  # Safe
@@ -256,7 +267,7 @@ class TetheredDriveApp(Tk):
                 motionChange = True
             else:
                 print repr(k), "not handled"
-        elif event.type == '3':  # KeyRelease; need to figure out how to get constant
+        elif event.event_type == 'up':  # KeyRelease; need to figure out how to get constant
             if k == 'UP':
                 self.callbackKeyUp = False
                 motionChange = True
@@ -272,90 +283,95 @@ class TetheredDriveApp(Tk):
 
         if motionChange == True:
 
-            if self.callbackKeyDown or self.callbackKeyUp:
-                self.Ramping = True
-            else:
-                self.Ramping = False
-            self.move()
 
-            """
-            velocity = 0
-            velocity += self.VELOCITYCHANGE if self.callbackKeyUp is True else 0
-            velocity -= self.VELOCITYCHANGE if self.callbackKeyDown is True else 0
-            rotation = 0
-            rotation += self.ROTATIONCHANGE if self.callbackKeyLeft is True else 0
-            rotation -= self.ROTATIONCHANGE if self.callbackKeyRight is True else 0
 
-            # compute left and right wheel velocities
-            vr = velocity + (rotation / 2)
-            vl = velocity - (rotation / 2)
+            velChange = True
+            while velChange:
+                if self.callbackKeyRight or self.callbackKeyLeft:
+                    rot = True
+                else:
+                    rot = False
 
-            if self.callbackKeyLeft or self.callbackKeyRight:
-                self.commandmove(vr, vl)
-   
-            # create drive command
-            cmd = struct.pack(">Bhh", 145, vr, vl)
-            if cmd != self.callbackKeyLastDriveCommand:
-                self.sendCommandRaw(cmd)
-                self.callbackKeyLastDriveCommand = cmd
-            """
+                if self.callbackKeyUp:
+                    dir = 1
+                    accel = True
+                elif self.callbackKeyDown:
+                    dir = -1
+                    accel = True
+                else:
+                    dir = 0
+                    accel = False
 
-    def move(self):
-        if self.callbackKeyDown or self.callbackKeyUp:
-            self.Ramping = True
-        else:
-            self.Ramping = False
+                print "VEL: ", VELOCITYLAST
 
-        velocity = 0
-        velocity += VELOCITYCHANGE if self.callbackKeyUp is True else 0
-        velocity -= VELOCITYCHANGE if self.callbackKeyDown is True else 0
-        rotation = 0
-        rotation += ROTATIONCHANGE if self.callbackKeyLeft is True else 0
-        rotation -= ROTATIONCHANGE if self.callbackKeyRight is True else 0
+                velocity = 0
+                velocity += VELOCITYLAST if self.callbackKeyUp is True else 0
+                velocity -= VELOCITYLAST if self.callbackKeyDown is True else 0
+                rotation = 0
+                rotation += ROTATIONCHANGE if self.callbackKeyLeft is True else 0
+                rotation -= ROTATIONCHANGE if self.callbackKeyRight is True else 0
 
-        # compute left and right wheel velocities
-        vr = velocity + (rotation / 2)
-        vl = velocity - (rotation / 2)
+                currentTime = time.time()
 
-        if self.callbackKeyLeft or self.callbackKeyRight:
-            self.commandmove(vr, vl)
+                if (currentTime - OLDTIME) > 0.03:
+                    # if TIMERDONE:
+                    print "TD"
+                    TIMERDONE = False
+                    OLDTIME = currentTime
+                    if dir ==1:#accelerate to max
+                        if VELOCITYLAST<VELOCITYMAX:
+                            velocity=VELOCITYLAST+VELOCITYDELTA
+                    elif dir ==0: #decelerate to 0
+                        if VELOCITYLAST>0:
+                            velocity=VELOCITYLAST-VELOCITYDELTA
+                        elif VELOCITYLAST<0:
+                            velocity=VELOCITYLAST+VELOCITYDELTA
+                    elif dir==-1: #accelerate to - max
+                        if VELOCITYLAST>-1*VELOCITYMAX:
+                            velocity=VELOCITYLAST-VELOCITYDELTA
+                    '''
+                    if accel == False:
 
-    def commandmove(self, vr, vl):
-        # create drive command
-        cmd = struct.pack(">Bhh", 145, vr, vl)
-        if cmd != self.callbackKeyLastDriveCommand:
-            self.sendCommandRaw(cmd)
+                        if dir == 1:
+                            print  "dir 1"
+                            velocity = VELOCITYLAST - VELOCITYDELTA
+                        elif dir == -1:
+                            print "dir -1"
+                            velocity = VELOCITYLAST + VELOCITYDELTA
+                        if velocity <= 10 or velocity >= -10:
+                            velocity = 0
+                    else:
+                        if VELOCITYLAST < VELOCITYMIN:
+                            VELOCITYLAST = VELOCITYMIN
+                        if dir == 1:
+                            velocity = VELOCITYLAST + VELOCITYDELTA
+                        elif dir == -1:
+                            velocity = VELOCITYLAST - VELOCITYDELTA
+                        if velocity > VELOCITYMAX or velocity < -1 * VELOCITYMAX:
+                            velocity = VELOCITYMAX
+                    '''
+                # compute left and right wheel velocities
+                vr = velocity + (rotation / 2)
+                vl = velocity - (rotation / 2)
 
-    def ramp(self, start, end, time):
-        steps = abs(end - start)
-        timeStep = time / steps
-        timer = threading.Timer(timeStep, )
+                # create drive command
+                cmd = struct.pack(">Bhh", 145, vr, vl)
+                if cmd != self.callbackKeyLastDriveCommand:
+                    self.sendCommandRaw(cmd)
+                    self.callbackKeyLastDriveCommand = cmd
+                    print "COMMAND SEND"
 
-    def directConnect(self, port):
-        global connection
+                VELOCITYLAST = velocity
 
-        if connection is not None:
-            tkMessageBox.showinfo('Oops', "You're already connected!")
-            return
-
-        if port is not None:
-            print "Trying " + str(port) + "... "
-            try:
-                connection = serial.Serial(port, baudrate=115200, timeout=1)
-                print "Connected!"
-                # tkMessageBox.showinfo('Connected', "Connection succeeded!")
-            except:
-                print "Failed."
-                tkMessageBox.showinfo('Failed', "Sorry, couldn't connect to " + str(port))
+                if VELOCITYLAST >= VELOCITYMAX or VELOCITYLAST == 0:
+                    velChange = False
 
     def onConnect(self):
         global connection
 
         if connection is not None:
-            connection = None
-
-            # tkMessageBox.showinfo('Oops', "You're already connected!")
-            # return
+            tkMessageBox.showinfo('Oops', "You're already connected!")
+            return
 
         try:
             ports = self.getSerialPorts()
@@ -368,8 +384,7 @@ class TetheredDriveApp(Tk):
             try:
                 connection = serial.Serial(port, baudrate=115200, timeout=1)
                 print "Connected!"
-                self.s
-                # tkMessageBox.showinfo('Connected', "Connection succeeded!")
+                tkMessageBox.showinfo('Connected', "Connection succeeded!")
             except:
                 print "Failed."
                 tkMessageBox.showinfo('Failed', "Sorry, couldn't connect to " + str(port))
@@ -412,6 +427,23 @@ class TetheredDriveApp(Tk):
             except (OSError, serial.SerialException):
                 pass
         return result
+
+    def directConnect(self, port):
+        global connection
+
+        if connection is not None:
+            tkMessageBox.showinfo('Oops', "You're already connected!")
+            return
+
+        if port is not None:
+            print "Trying " + str(port) + "... "
+            try:
+                connection = serial.Serial(port, baudrate=115200, timeout=1)
+                print "Connected!"
+                # tkMessageBox.showinfo('Connected', "Connection succeeded!")
+            except:
+                print "Failed."
+                tkMessageBox.showinfo('Failed', "Sorry, couldn't connect to " + str(port))
 
 
 if __name__ == "__main__":
