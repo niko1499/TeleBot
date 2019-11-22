@@ -69,7 +69,7 @@ ROTATIONCHANGE = 300
 VELOCITYMAX = 500
 VELOCITYMIN = 125
 VELOCITYLAST = 0
-VELOCITYDELTA = 1
+VELOCITYDELTA = 20
 TIMERDONE = False
 OLDTIME = time.time()
 
@@ -152,7 +152,7 @@ class TetheredDriveApp(Tk):
         time.sleep(.1)
         self.sendCommandASCII('128')
         self.sendCommandASCII('131')
-        self.timer = threading.Timer(0.00000000250, self.timerCB)
+        self.timer = threading.Timer(0.001, self.timerCB)
 
     # self.timer.start()
 
@@ -235,7 +235,7 @@ class TetheredDriveApp(Tk):
         k = k.upper()
         print"---------------------------"
         print "KEYYY:", k
-        print "TYPE: " , event.event_type
+        print "TYPE: ", event.event_type
 
         motionChange = False
         if event.event_type == 'down':  # KeyPress; need to figure out how to get constant
@@ -283,7 +283,10 @@ class TetheredDriveApp(Tk):
 
         if motionChange == True:
 
-
+            isup = keyboard.is_pressed('up')
+            isdown = keyboard.is_pressed('down')
+            isleft = keyboard.is_pressed('left')
+            isright = keyboard.is_pressed('right')
 
             velChange = True
             while velChange:
@@ -294,13 +297,10 @@ class TetheredDriveApp(Tk):
 
                 if self.callbackKeyUp:
                     dir = 1
-                    accel = True
                 elif self.callbackKeyDown:
                     dir = -1
-                    accel = True
                 else:
                     dir = 0
-                    accel = False
 
                 print "VEL: ", VELOCITYLAST
 
@@ -315,56 +315,49 @@ class TetheredDriveApp(Tk):
 
                 if (currentTime - OLDTIME) > 0.03:
                     # if TIMERDONE:
-                    print "TD"
+                    print "TIMER DONE, DIR:", dir, "VEL: ", VELOCITYLAST
                     TIMERDONE = False
                     OLDTIME = currentTime
-                    if dir ==1:#accelerate to max
-                        if VELOCITYLAST<VELOCITYMAX:
-                            velocity=VELOCITYLAST+VELOCITYDELTA
-                    elif dir ==0: #decelerate to 0
-                        if VELOCITYLAST>0:
-                            velocity=VELOCITYLAST-VELOCITYDELTA
-                        elif VELOCITYLAST<0:
-                            velocity=VELOCITYLAST+VELOCITYDELTA
-                    elif dir==-1: #accelerate to - max
-                        if VELOCITYLAST>-1*VELOCITYMAX:
-                            velocity=VELOCITYLAST-VELOCITYDELTA
-                    '''
-                    if accel == False:
-
-                        if dir == 1:
-                            print  "dir 1"
-                            velocity = VELOCITYLAST - VELOCITYDELTA
-                        elif dir == -1:
-                            print "dir -1"
+                    if dir == 1:  # accelerate to max
+                        if VELOCITYLAST < VELOCITYMAX:
+                            print "A"
                             velocity = VELOCITYLAST + VELOCITYDELTA
-                        if velocity <= 10 or velocity >= -10:
-                            velocity = 0
-                    else:
-                        if VELOCITYLAST < VELOCITYMIN:
-                            VELOCITYLAST = VELOCITYMIN
-                        if dir == 1:
-                            velocity = VELOCITYLAST + VELOCITYDELTA
-                        elif dir == -1:
-                            velocity = VELOCITYLAST - VELOCITYDELTA
-                        if velocity > VELOCITYMAX or velocity < -1 * VELOCITYMAX:
+                        else:
                             velocity = VELOCITYMAX
-                    '''
-                # compute left and right wheel velocities
-                vr = velocity + (rotation / 2)
-                vl = velocity - (rotation / 2)
+                    elif dir == 0:  # decelerate to 0
+                        if VELOCITYLAST > 0:
+                            print "B1"
+                            velocity = VELOCITYLAST - VELOCITYDELTA
+                        elif VELOCITYLAST < 0:
+                            print "B2"
+                            velocity = VELOCITYLAST + VELOCITYDELTA
+                        else:
+                            velocity = 0
+                    elif dir == -1:  # accelerate to - max
+                        if VELOCITYLAST > -1 * VELOCITYMAX:
+                            print "C"
+                            velocity = VELOCITYLAST - VELOCITYDELTA
+                        else:
+                            velocity = -1 * VELOCITYMAX
 
-                # create drive command
-                cmd = struct.pack(">Bhh", 145, vr, vl)
-                if cmd != self.callbackKeyLastDriveCommand:
-                    self.sendCommandRaw(cmd)
-                    self.callbackKeyLastDriveCommand = cmd
-                    print "COMMAND SEND"
+                    # compute left and right wheel velocities
+                    vr = velocity + (rotation / 2)
+                    vl = velocity - (rotation / 2)
 
-                VELOCITYLAST = velocity
+                    # create drive command
+                    cmd = struct.pack(">Bhh", 145, vr, vl)
+                    if cmd != self.callbackKeyLastDriveCommand:
+                        self.sendCommandRaw(cmd)
+                        self.callbackKeyLastDriveCommand = cmd
+                        print "COMMAND SEND"
 
-                if VELOCITYLAST >= VELOCITYMAX or VELOCITYLAST == 0:
-                    velChange = False
+                    VELOCITYLAST = velocity
+
+                    if abs(VELOCITYLAST) >= VELOCITYMAX or VELOCITYLAST == 0:
+                        velChange = False
+                    if isup != keyboard.is_pressed('up') or isdown != keyboard.is_pressed(
+                            'down') or isleft != keyboard.is_pressed('left') or isright != keyboard.is_pressed('right'):
+                        velChange = False
 
     def onConnect(self):
         global connection
