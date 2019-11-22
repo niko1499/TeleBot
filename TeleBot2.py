@@ -81,6 +81,7 @@ F\tFull
 C\tClean
 D\tDock
 R\tReset
+S\tE-Stop
 Space\tBeep
 Arrows\tMotion
 
@@ -152,7 +153,7 @@ class TetheredDriveApp(Tk):
         time.sleep(.1)
         self.sendCommandASCII('128')
         self.sendCommandASCII('131')
-        self.timer = threading.Timer(0.001, self.timerCB)
+        self.timer = threading.Timer(0.005, self.timerCB)
 
     # self.timer.start()
 
@@ -265,6 +266,8 @@ class TetheredDriveApp(Tk):
             elif k == 'RIGHT':
                 self.callbackKeyRight = True
                 motionChange = True
+            elif k=='S':
+                self.stop()
             else:
                 print repr(k), "not handled"
         elif event.event_type == 'up':  # KeyRelease; need to figure out how to get constant
@@ -287,6 +290,7 @@ class TetheredDriveApp(Tk):
             isdown = keyboard.is_pressed('down')
             isleft = keyboard.is_pressed('left')
             isright = keyboard.is_pressed('right')
+
 
             velChange = True
             while velChange:
@@ -353,11 +357,24 @@ class TetheredDriveApp(Tk):
 
                     VELOCITYLAST = velocity
 
+                    if keyboard.is_pressed('s'):
+                        velChange=False
+                        velocity=0
+                        vl=0
+                        vr=0
+                        VELOCITYLAST=0
+                        self.stop()
                     if abs(VELOCITYLAST) >= VELOCITYMAX or VELOCITYLAST == 0:
                         velChange = False
                     if isup != keyboard.is_pressed('up') or isdown != keyboard.is_pressed(
                             'down') or isleft != keyboard.is_pressed('left') or isright != keyboard.is_pressed('right'):
                         velChange = False
+
+    def stop(self):
+        cmd = struct.pack(">Bhh", 145, 0, 0)
+        if cmd != self.callbackKeyLastDriveCommand:
+            self.sendCommandRaw(cmd)
+            self.callbackKeyLastDriveCommand = cmd
 
     def onConnect(self):
         global connection
@@ -423,6 +440,8 @@ class TetheredDriveApp(Tk):
 
     def directConnect(self, port):
         global connection
+        self.text.insert(END,("Automatically Connecting to ", port))
+        self.text.insert(END, '\n')
 
         if connection is not None:
             tkMessageBox.showinfo('Oops', "You're already connected!")
