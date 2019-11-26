@@ -235,8 +235,6 @@ class TetheredDriveApp(Tk):
         k = event.name
         k = k.upper()
         print"---------------------------"
-        print "KEYYY:", k
-        print "TYPE: ", event.event_type
 
         motionChange = False
         if event.event_type == 'down':  # KeyPress; need to figure out how to get constant
@@ -306,7 +304,6 @@ class TetheredDriveApp(Tk):
                 else:
                     dir = 0
 
-                print "VEL: ", VELOCITYLAST
 
                 velocity = 0
                 velocity += VELOCITYLAST if self.callbackKeyUp is True else 0
@@ -324,22 +321,18 @@ class TetheredDriveApp(Tk):
                     OLDTIME = currentTime
                     if dir == 1:  # accelerate to max
                         if VELOCITYLAST < VELOCITYMAX:
-                            print "A"
                             velocity = VELOCITYLAST + VELOCITYDELTA
                         else:
                             velocity = VELOCITYMAX
                     elif dir == 0:  # decelerate to 0
                         if VELOCITYLAST > 0:
-                            print "B1"
                             velocity = VELOCITYLAST - VELOCITYDELTA
                         elif VELOCITYLAST < 0:
-                            print "B2"
                             velocity = VELOCITYLAST + VELOCITYDELTA
                         else:
                             velocity = 0
                     elif dir == -1:  # accelerate to - max
                         if VELOCITYLAST > -1 * VELOCITYMAX:
-                            print "C"
                             velocity = VELOCITYLAST - VELOCITYDELTA
                         else:
                             velocity = -1 * VELOCITYMAX
