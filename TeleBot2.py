@@ -64,7 +64,7 @@ TEXTWIDTH = 40  # window width, in characters
 TEXTHEIGHT = 16  # window height, in lines
 
 VELOCITYCHANGE = 200
-ROTATIONCHANGE = 300
+ROTATIONCHANGE = 200
 
 VELOCITYMAX = 500
 VELOCITYMIN = 125
