@@ -149,7 +149,7 @@ class TetheredDriveApp(Tk):
         char = getch()
 
     def customstartup(self):
-        self.directConnect("COM6")
+        self.directConnect("COM3")
         time.sleep(.1)
         self.sendCommandASCII('128')
         self.sendCommandASCII('131')
